@@ -1,0 +1,24 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar';
+import Hero from '../components/Hero';
+import Benefits from '../components/Benefits';
+import AboutSection from '../components/AboutSection';
+import Testimonials from '../components/Testimonials';
+import Faq from '../components/Faq';
+import CtaSection from '../components/CtaSection';
+import Footer from '../components/Footer';
+---
+
+<Layout>
+  <Navbar client:load />
+  <main>
+    <Hero client:load />
+    <Benefits client:visible />
+    <AboutSection client:visible />
+    <Testimonials client:visible />
+    <Faq client:visible />
+    <CtaSection client:visible />
+  </main>
+  <Footer />
+</Layout>
