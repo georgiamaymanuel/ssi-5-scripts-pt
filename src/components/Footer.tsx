@@ -1,13 +1,17 @@
-const navLinks = [
-  { label: 'Benefits', href: '/#benefits' },
-  { label: 'About', href: '/#about' },
-  { label: 'Testimonials', href: '/#testimonials' },
-  { label: 'FAQ', href: '/#faq' },
-  { label: 'Get the Scripts', href: '/#download' },
-];
+interface FooterProps {
+  basePath?: string;
+}
 
-export default function Footer() {
+export default function Footer({ basePath = '' }: FooterProps) {
   const currentYear = new Date().getFullYear();
+
+  const navLinks = [
+    { label: 'Benefits', href: `${basePath}#benefits` },
+    { label: 'About', href: `${basePath}#about` },
+    { label: 'Testimonials', href: `${basePath}#testimonials` },
+    { label: 'FAQ', href: `${basePath}#faq` },
+    { label: 'Get the Scripts', href: `${basePath}#download` },
+  ];
 
   return (
     <footer className="bg-navy-950 pt-14 pb-8">
@@ -16,7 +20,7 @@ export default function Footer() {
         <div className="grid sm:grid-cols-3 gap-10 sm:gap-8 mb-10">
           {/* Logo */}
           <div>
-            <a href="/">
+            <a href="https://survivalstrategies.com">
               <img
                 src="/images/logo-light.png"
                 alt="Survival Strategies, Inc."

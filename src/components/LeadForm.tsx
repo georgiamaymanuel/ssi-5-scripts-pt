@@ -27,82 +27,29 @@ export default function LeadForm({ variant = 'hero' }: LeadFormProps) {
     setStatus('submitting');
     setErrorMessage('');
 
-    // ─────────────────────────────────────────────
-    // MAILCHIMP INTEGRATION
-    // ─────────────────────────────────────────────
-    // Replace the URL below with your Mailchimp form POST URL.
-    // To find it: Mailchimp → Audience → Signup forms → Embedded forms
-    // The action URL looks like:
-    //   https://XXXXX.us1.list-manage.com/subscribe/post?u=XXXXX&id=XXXXX
-    //
-    // Change "/post?" to "/post-json?" and add "&c=?" at the end for JSONP.
-    // Map your merge fields below (FNAME, EMAIL, MMERGE3, etc.)
-    // ─────────────────────────────────────────────
-
-    const MAILCHIMP_URL =
-      'https://YOURPREFIX.usX.list-manage.com/subscribe/post-json?u=YOUR_U_VALUE&id=YOUR_ID_VALUE&c=?';
-
-    // Build URL params for Mailchimp merge fields
-    const params = new URLSearchParams({
-      FNAME: formData.name,
-      EMAIL: formData.email,
-      MMERGE3: formData.practiceName, // Custom merge field for practice name
-    });
-
     try {
-      // JSONP approach for Mailchimp (avoids CORS issues)
-      const url = `${MAILCHIMP_URL}&${params.toString()}`;
-
-      await new Promise<void>((resolve, reject) => {
-        const callbackName = `mc_callback_${Date.now()}`;
-
-        // Timeout after 10s
-        const timeout = setTimeout(() => {
-          cleanup();
-          reject(new Error('Request timed out'));
-        }, 10000);
-
-        function cleanup() {
-          clearTimeout(timeout);
-          delete (window as Record<string, unknown>)[callbackName];
-          const script = document.getElementById(callbackName);
-          if (script) script.remove();
-        }
-
-        // Define callback
-        (window as Record<string, unknown>)[callbackName] = (data: { result: string; msg: string }) => {
-          cleanup();
-          if (data.result === 'success') {
-            resolve();
-          } else {
-            reject(new Error(data.msg || 'Subscription failed'));
-          }
-        };
-
-        // Create JSONP script
-        const script = document.createElement('script');
-        script.id = callbackName;
-        script.src = url.replace('c=?', `c=${callbackName}`);
-        script.onerror = () => {
-          cleanup();
-          reject(new Error('Network error'));
-        };
-        document.body.appendChild(script);
+      const res = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          practiceName: formData.practiceName,
+        }),
       });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Something went wrong.');
+      }
 
       setStatus('success');
     } catch (err) {
-      // If Mailchimp URL is not configured yet, still show success for development
-      if (MAILCHIMP_URL.includes('YOURPREFIX')) {
-        console.warn('Mailchimp URL not configured. Showing success state for development.');
-        setStatus('success');
-        return;
-      }
-
       setStatus('error');
       setErrorMessage(
         err instanceof Error
-          ? err.message.replace(/<a[^>]*>.*?<\/a>/gi, '').trim()
+          ? err.message
           : 'Something went wrong. Please try again.'
       );
     }

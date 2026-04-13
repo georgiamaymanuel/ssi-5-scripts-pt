@@ -1,16 +1,20 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const navLinks = [
-  { label: 'Benefits', href: '/#benefits' },
-  { label: 'About', href: '/#about' },
-  { label: 'Testimonials', href: '/#testimonials' },
-  { label: 'FAQ', href: '/#faq' },
-];
+interface NavbarProps {
+  basePath?: string;
+}
 
-export default function Navbar() {
+export default function Navbar({ basePath = '' }: NavbarProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const navLinks = [
+    { label: 'Benefits', href: `${basePath}#benefits` },
+    { label: 'About', href: `${basePath}#about` },
+    { label: 'Testimonials', href: `${basePath}#testimonials` },
+    { label: 'FAQ', href: `${basePath}#faq` },
+  ];
 
   useEffect(() => {
     const handleScroll = () => {
@@ -43,7 +47,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-18">
           {/* Logo */}
-          <a href="/" className="flex-shrink-0">
+          <a href="https://survivalstrategies.com" className="flex-shrink-0">
             <img
               src="/images/logo-light.png"
               alt="Survival Strategies, Inc."
@@ -63,7 +67,7 @@ export default function Navbar() {
               </a>
             ))}
             <a
-              href="/#download"
+              href={`${basePath}#download`}
               className="ml-2 px-5 py-2.5 bg-white text-navy-900 text-sm font-bold rounded-md hover:bg-gray-100 transition-colors"
             >
               Get the Scripts
@@ -110,7 +114,7 @@ export default function Navbar() {
               ))}
               <div className="pt-3">
                 <a
-                  href="/#download"
+                  href={`${basePath}#download`}
                   onClick={() => setMobileOpen(false)}
                   className="block w-full text-center px-5 py-3 bg-white text-navy-900 font-bold rounded-md hover:bg-gray-100 transition-colors"
                 >
