@@ -2,6 +2,13 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 
+export function splitName(fullName: string): { first: string; last: string } {
+  const trimmed = fullName.trim().replace(/\s+/g, ' ');
+  const idx = trimmed.indexOf(' ');
+  if (idx === -1) return { first: trimmed, last: '' };
+  return { first: trimmed.slice(0, idx), last: trimmed.slice(idx + 1) };
+}
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const body = await request.json();
@@ -18,6 +25,8 @@ export const POST: APIRoute = async ({ request }) => {
     const LIST_ID = import.meta.env.MAILCHIMP_LIST_ID;
     const DC = import.meta.env.MAILCHIMP_DC;
 
+    const { first, last } = splitName(name);
+
     // 1. Add or update the subscriber
     const subscriberHash = md5(email.toLowerCase().trim());
 
@@ -33,7 +42,8 @@ export const POST: APIRoute = async ({ request }) => {
           email_address: email.toLowerCase().trim(),
           status_if_new: 'subscribed',
           merge_fields: {
-            FNAME: name,
+            FNAME: first,
+            LNAME: last,
             PRACTICE: practiceName,
           },
         }),
@@ -87,7 +97,7 @@ export const POST: APIRoute = async ({ request }) => {
 };
 
 // MD5 hash for Mailchimp subscriber hash (pure JS, no dependencies)
-function md5(input: string): string {
+export function md5(input: string): string {
   const k = [
     0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
     0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
@@ -112,7 +122,8 @@ function md5(input: string): string {
   bytes.push(0x80);
   while (bytes.length % 64 !== 56) bytes.push(0);
   const bitLen = input.length * 8;
-  for (let i = 0; i < 8; i++) bytes.push((bitLen >>> (i * 8)) & 0xff);
+  for (let i = 0; i < 4; i++) bytes.push((bitLen >>> (i * 8)) & 0xff);
+  for (let i = 0; i < 4; i++) bytes.push(0);
 
   let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
 
