@@ -102,6 +102,20 @@ export const POST: APIRoute = async ({ request }) => {
       }),
     });
 
+    // 3. Add to Google Sheet ("Free Scripts" tab)
+    try {
+      await fetch('https://script.google.com/macros/s/AKfycbyTN72ceBLBLgI_6lyZwZCpyjk_SSJABXatYKtXROhhuExWzKZ7RvRoId8VG57U6VVUQw/exec', {
+        method: 'POST',
+        body: JSON.stringify({
+          tab: 'Free Scripts',
+          row: [first, last, email.toLowerCase().trim(), practiceName, new Date().toLocaleString('sv-SE', { timeZone: 'America/New_York' }).replace('T', ' ')],
+        }),
+      });
+    } catch (sheetError) {
+      console.error('Google Sheet error:', sheetError);
+      // Don't fail the request if sheet write fails
+    }
+
     if (!emailResponse.ok) {
       const emailError = await emailResponse.text();
       console.error('Resend email error:', emailResponse.status, emailError);
