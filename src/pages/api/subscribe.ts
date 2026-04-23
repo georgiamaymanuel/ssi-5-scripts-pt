@@ -21,89 +21,94 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    const API_KEY = import.meta.env.MAILCHIMP_API_KEY;
-    const LIST_ID = import.meta.env.MAILCHIMP_LIST_ID;
-    const DC = import.meta.env.MAILCHIMP_DC;
+    const API_KEY = import.meta.env.RESEND_API_KEY;
+    const AUDIENCE_ID = import.meta.env.RESEND_AUDIENCE_ID;
 
     const { first, last } = splitName(name);
 
-    // 1. Add or update the subscriber
-    const subscriberHash = md5(email.toLowerCase().trim());
-
-    // Try PUT first (upsert), fall back to PATCH for existing members
-    let memberOk = false;
-    const memberPayload = {
-      email_address: email.toLowerCase().trim(),
-      status_if_new: 'subscribed',
-      merge_fields: {
-        FNAME: first,
-        LNAME: last,
-        PRACTICE: practiceName,
-      },
-    };
-
-    const memberResponse = await fetch(
-      `https://${DC}.api.mailchimp.com/3.0/lists/${LIST_ID}/members/${subscriberHash}`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: `Basic ${btoa(`anystring:${API_KEY}`)}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(memberPayload),
-      }
-    );
-
-    if (memberResponse.ok) {
-      memberOk = true;
-    } else {
-      // If PUT fails, try PATCH (update existing member)
-      const patchResponse = await fetch(
-        `https://${DC}.api.mailchimp.com/3.0/lists/${LIST_ID}/members/${subscriberHash}`,
-        {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Basic ${btoa(`anystring:${API_KEY}`)}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            merge_fields: { FNAME: first, LNAME: last, PRACTICE: practiceName },
-          }),
-        }
-      );
-      memberOk = patchResponse.ok;
-      if (!memberOk) {
-        const errorData = await patchResponse.text();
-        console.error('Mailchimp member error:', errorData);
-        return new Response(
-          JSON.stringify({ error: 'Failed to subscribe.' }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
-    // 2. Add the tag "5-scripts-PT"
-    const tagResponse = await fetch(
-      `https://${DC}.api.mailchimp.com/3.0/lists/${LIST_ID}/members/${subscriberHash}/tags`,
+    // 1. Add contact to Resend audience
+    const contactResponse = await fetch(
+      `https://api.resend.com/audiences/${AUDIENCE_ID}/contacts`,
       {
         method: 'POST',
         headers: {
-          Authorization: `Basic ${btoa(`anystring:${API_KEY}`)}`,
+          Authorization: `Bearer ${API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          tags: [
-            { name: '5-scripts-PT', status: 'active' },
-            { name: 'PT', status: 'active' },
-          ],
+          email: email.toLowerCase().trim(),
+          first_name: first,
+          last_name: last,
+          unsubscribed: false,
         }),
       }
     );
 
-    if (!tagResponse.ok) {
-      const tagErrorText = await tagResponse.text();
-      console.error('Mailchimp tag error:', tagResponse.status, tagErrorText);
-      // Don't fail the whole request if tagging fails — subscriber is already added
+    if (!contactResponse.ok) {
+      const errorData = await contactResponse.text();
+      console.error('Resend contact error:', contactResponse.status, errorData);
+      // Don't fail if contact already exists — continue to send email
+    }
+
+    // 2. Send transactional email with PDF download link
+    const downloadUrl = 'https://scripts.survivalstrategies.com/assets/SSI-PT-Front-Desk-Scripts.pdf';
+
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Craig Ferreira <noreply@send.survivalstrategies.com>',
+        to: [email.toLowerCase().trim()],
+        subject: 'Your 5 Front Desk Scripts Are Ready',
+        html: `
+          <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+            <div style="background: #1D2C5A; padding: 32px 40px; text-align: center;">
+              <img src="https://survivalstrategies.com/wp-content/uploads/2023/05/Logo-Light.png" alt="Survival Strategies" style="height: 40px; width: auto;" />
+            </div>
+            <div style="padding: 40px; background: #ffffff;">
+              <h1 style="font-size: 24px; color: #1D2C5A; margin: 0 0 16px;">Hi ${first},</h1>
+              <p style="font-size: 16px; line-height: 1.6; margin: 0 0 16px;">
+                Thank you for requesting the <strong>5 Front Desk Scripts That Stop Revenue From Walking Out Your Door</strong>.
+              </p>
+              <p style="font-size: 16px; line-height: 1.6; margin: 0 0 24px;">
+                These scripts are proven across 1,000+ private practices. Print them out, share them with your front desk team, and start using them today.
+              </p>
+              <div style="text-align: center; margin: 32px 0;">
+                <a href="${downloadUrl}" style="display: inline-block; background: #1D2C5A; color: #ffffff; font-weight: 700; font-size: 16px; padding: 16px 40px; border-radius: 6px; text-decoration: none;">
+                  Download Your Scripts (PDF)
+                </a>
+              </div>
+              <p style="font-size: 14px; line-height: 1.6; color: #6b7280; margin: 0 0 8px;">
+                If the button above doesn't work, copy and paste this link into your browser:
+              </p>
+              <p style="font-size: 13px; color: #4A90D9; word-break: break-all; margin: 0 0 32px;">
+                ${downloadUrl}
+              </p>
+              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;" />
+              <p style="font-size: 14px; line-height: 1.6; color: #6b7280; margin: 0;">
+                Over the next few weeks, I'll send you a few short emails covering what the scripts don't: the real cost of missed calls, where your biggest revenue leaks hide, and what other PT owners have done to close them.
+              </p>
+            </div>
+            <div style="background: #f8f9fb; padding: 24px 40px; text-align: center;">
+              <p style="font-size: 12px; color: #9ca3af; margin: 0;">
+                Survival Strategies, Inc. | 401 East Jackson Street, Suite 2340-E58, Tampa, FL 33602
+              </p>
+            </div>
+          </div>
+        `,
+      }),
+    });
+
+    if (!emailResponse.ok) {
+      const emailError = await emailResponse.text();
+      console.error('Resend email error:', emailResponse.status, emailError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to send email. Please try again.' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(
@@ -118,58 +123,3 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 };
-
-// MD5 hash for Mailchimp subscriber hash (pure JS, no dependencies)
-export function md5(input: string): string {
-  const k = [
-    0xd76aa478,0xe8c7b756,0x242070db,0xc1bdceee,0xf57c0faf,0x4787c62a,0xa8304613,0xfd469501,
-    0x698098d8,0x8b44f7af,0xffff5bb1,0x895cd7be,0x6b901122,0xfd987193,0xa679438e,0x49b40821,
-    0xf61e2562,0xc040b340,0x265e5a51,0xe9b6c7aa,0xd62f105d,0x02441453,0xd8a1e681,0xe7d3fbc8,
-    0x21e1cde6,0xc33707d6,0xf4d50d87,0x455a14ed,0xa9e3e905,0xfcefa3f8,0x676f02d9,0x8d2a4c8a,
-    0xfffa3942,0x8771f681,0x6d9d6122,0xfde5380c,0xa4beea44,0x4bdecfa9,0xf6bb4b60,0xbebfbc70,
-    0x289b7ec6,0xeaa127fa,0xd4ef3085,0x04881d05,0xd9d4d039,0xe6db99e5,0x1fa27cf8,0xc4ac5665,
-    0xf4292244,0x432aff97,0xab9423a7,0xfc93a039,0x655b59c3,0x8f0ccc92,0xffeff47d,0x85845dd1,
-    0x6fa87e4f,0xfe2ce6e0,0xa3014314,0x4e0811a1,0xf7537e82,0xbd3af235,0x2ad7d2bb,0xeb86d391,
-  ];
-  const s = [
-    7,12,17,22,7,12,17,22,7,12,17,22,7,12,17,22,
-    5,9,14,20,5,9,14,20,5,9,14,20,5,9,14,20,
-    4,11,16,23,4,11,16,23,4,11,16,23,4,11,16,23,
-    6,10,15,21,6,10,15,21,6,10,15,21,6,10,15,21,
-  ];
-
-  const bytes: number[] = [];
-  for (let i = 0; i < input.length; i++) {
-    bytes.push(input.charCodeAt(i) & 0xff);
-  }
-  bytes.push(0x80);
-  while (bytes.length % 64 !== 56) bytes.push(0);
-  const bitLen = input.length * 8;
-  for (let i = 0; i < 4; i++) bytes.push((bitLen >>> (i * 8)) & 0xff);
-  for (let i = 0; i < 4; i++) bytes.push(0);
-
-  let a0 = 0x67452301, b0 = 0xefcdab89, c0 = 0x98badcfe, d0 = 0x10325476;
-
-  for (let i = 0; i < bytes.length; i += 64) {
-    const m: number[] = [];
-    for (let j = 0; j < 16; j++) {
-      m[j] = bytes[i+j*4] | (bytes[i+j*4+1]<<8) | (bytes[i+j*4+2]<<16) | (bytes[i+j*4+3]<<24);
-    }
-    let a = a0, b = b0, c = c0, d = d0;
-    for (let j = 0; j < 64; j++) {
-      let f: number, g: number;
-      if (j < 16) { f = (b & c) | (~b & d); g = j; }
-      else if (j < 32) { f = (d & b) | (~d & c); g = (5*j+1) % 16; }
-      else if (j < 48) { f = b ^ c ^ d; g = (3*j+5) % 16; }
-      else { f = c ^ (b | ~d); g = (7*j) % 16; }
-      const tmp = d; d = c; c = b;
-      const x = (a + f + k[j] + m[g]) >>> 0;
-      b = (b + ((x << s[j]) | (x >>> (32 - s[j])))) >>> 0;
-      a = tmp;
-    }
-    a0 = (a0 + a) >>> 0; b0 = (b0 + b) >>> 0; c0 = (c0 + c) >>> 0; d0 = (d0 + d) >>> 0;
-  }
-
-  const hex = (n: number) => Array.from({length:4},(_,i)=>((n>>>(i*8))&0xff).toString(16).padStart(2,'0')).join('');
-  return hex(a0) + hex(b0) + hex(c0) + hex(d0);
-}
