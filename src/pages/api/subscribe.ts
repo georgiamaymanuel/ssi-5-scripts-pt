@@ -30,6 +30,18 @@ export const POST: APIRoute = async ({ request }) => {
     // 1. Add or update the subscriber
     const subscriberHash = md5(email.toLowerCase().trim());
 
+    // Try PUT first (upsert), fall back to PATCH for existing members
+    let memberOk = false;
+    const memberPayload = {
+      email_address: email.toLowerCase().trim(),
+      status_if_new: 'subscribed',
+      merge_fields: {
+        FNAME: first,
+        LNAME: last,
+        PRACTICE: practiceName,
+      },
+    };
+
     const memberResponse = await fetch(
       `https://${DC}.api.mailchimp.com/3.0/lists/${LIST_ID}/members/${subscriberHash}`,
       {
@@ -38,25 +50,36 @@ export const POST: APIRoute = async ({ request }) => {
           Authorization: `Basic ${btoa(`anystring:${API_KEY}`)}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email_address: email.toLowerCase().trim(),
-          status_if_new: 'subscribed',
-          merge_fields: {
-            FNAME: first,
-            LNAME: last,
-            PRACTICE: practiceName,
-          },
-        }),
+        body: JSON.stringify(memberPayload),
       }
     );
 
-    if (!memberResponse.ok) {
-      const errorData = await memberResponse.json();
-      console.error('Mailchimp member error:', errorData);
-      return new Response(
-        JSON.stringify({ error: errorData.detail || 'Failed to subscribe.' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+    if (memberResponse.ok) {
+      memberOk = true;
+    } else {
+      // If PUT fails, try PATCH (update existing member)
+      const patchResponse = await fetch(
+        `https://${DC}.api.mailchimp.com/3.0/lists/${LIST_ID}/members/${subscriberHash}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Basic ${btoa(`anystring:${API_KEY}`)}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            merge_fields: { FNAME: first, LNAME: last, PRACTICE: practiceName },
+          }),
+        }
       );
+      memberOk = patchResponse.ok;
+      if (!memberOk) {
+        const errorData = await patchResponse.text();
+        console.error('Mailchimp member error:', errorData);
+        return new Response(
+          JSON.stringify({ error: 'Failed to subscribe.' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     // 2. Add the tag "5-scripts-PT"
@@ -78,8 +101,8 @@ export const POST: APIRoute = async ({ request }) => {
     );
 
     if (!tagResponse.ok) {
-      const tagError = await tagResponse.json();
-      console.error('Mailchimp tag error:', tagError);
+      const tagErrorText = await tagResponse.text();
+      console.error('Mailchimp tag error:', tagResponse.status, tagErrorText);
       // Don't fail the whole request if tagging fails — subscriber is already added
     }
 

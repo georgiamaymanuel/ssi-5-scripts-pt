@@ -7,7 +7,12 @@ import cloudflare from '@astrojs/cloudflare';
 
 // https://astro.build/config
 export default defineConfig({
-  adapter: cloudflare(),
+  adapter: cloudflare({
+    platformProxy: {
+      compatibilityDate: '2026-04-13',
+      enabled: false,
+    },
+  }),
   integrations: [react()],
 
   vite: {
